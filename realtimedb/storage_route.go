@@ -11,7 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func init() {
+func initStorageRouter(router *gin.Engine) {
 	storageRoute := router.Group("/storage/:database", func(c *gin.Context) {
 		databaseName := c.Param("database")
 		client := c.MustGet("dbClient").(*mongo.Client)

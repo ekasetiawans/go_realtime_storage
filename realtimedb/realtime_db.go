@@ -1,29 +1,43 @@
 package realtimedb
 
 import (
-	"github.com/gin-gonic/gin"
-)
+	"context"
+	"net/http"
 
-var (
-	router = createRoute()
+	"github.com/gin-gonic/gin"
 )
 
 func createRoute() *gin.Engine {
 	res := gin.Default()
-	stream := newStream()
-	client := getClient()
-
-	res.Use(func(c *gin.Context) {
-		c.Set("stream", stream)
-		c.Set("dbClient", client)
-	})
-
 	return res
 }
 
 type RealtimeStorage struct {
+	srv *http.Server
+}
+
+func (r *RealtimeStorage) Stop(ctx context.Context) error {
+	return r.srv.Shutdown(ctx)
 }
 
 func (r *RealtimeStorage) Run(address string) error {
-	return router.Run(address)
+	stream := newStream()
+	client := getClient()
+
+	router := createRoute()
+
+	router.Use(func(c *gin.Context) {
+		c.Set("stream", stream)
+		c.Set("dbClient", client)
+	})
+
+	initDatabaseRouter(router)
+	initStorageRouter(router)
+
+	r.srv = &http.Server{
+		Addr:    address,
+		Handler: router,
+	}
+
+	return r.srv.ListenAndServe()
 }

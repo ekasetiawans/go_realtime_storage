@@ -1,8 +1,12 @@
 package main
 
-import "github.com/ekasetiawans/realtimestorage/realtimedb"
+import (
+	"log"
+
+	"github.com/ekasetiawans/realtimestorage/realtimedb"
+)
 
 func main() {
 	server := &realtimedb.RealtimeStorage{}
-	server.Run(":8888")
+	log.Fatal(server.Run(":8888"))
 }

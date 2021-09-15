@@ -9,7 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func init() {
+func initDatabaseRouter(router *gin.Engine) {
 	databaseRoute := router.Group("/database/:database", func(c *gin.Context) {
 		databaseName := c.Param("database")
 		client := c.MustGet("dbClient").(*mongo.Client)
