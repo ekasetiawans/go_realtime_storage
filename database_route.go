@@ -1,0 +1,238 @@
+package main
+
+import (
+	"log"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+)
+
+func init() {
+	databaseRoute := router.Group("/database/:database", func(c *gin.Context) {
+		databaseName := c.Param("database")
+		db := client.Database(databaseName)
+		c.Set("db", db)
+	})
+
+	databaseRoute.Any("*path", func(c *gin.Context) {
+		db := c.MustGet("db").(*mongo.Database)
+
+		log.Println(c.IsWebsocket())
+		if c.Request.Method == "GET" && c.IsWebsocket() {
+			ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+			if err != nil {
+				c.Status(500)
+				return
+			}
+
+			stream := c.MustGet("stream").(*stream)
+
+			defer stream.cancelAll(ws)
+			defer ws.Close()
+
+			for {
+				data := map[string]interface{}{}
+				err := ws.ReadJSON(&data)
+				if err != nil {
+					break
+				}
+
+				command := data["command"].(string)
+				switch command {
+				case "sub":
+					path := data["path"].(string)
+					stream.listen(path, ws)
+
+				case "unsub":
+					path := data["path"].(string)
+					stream.cancel(path, ws)
+				}
+			}
+
+			log.Println("disconnected")
+			return
+		}
+
+		path := c.Request.URL.Path
+		segments := strings.Split(path, "/")
+		segments = segments[3:]
+		if segments[len(segments)-1] == "" {
+			segments = segments[:len(segments)-1]
+		}
+
+		//ensure all docId valid
+		for i := 1; i < len(segments); i += 2 {
+			docIdHex := segments[i]
+			_, err := primitive.ObjectIDFromHex(docIdHex)
+			if err != nil {
+				c.Status(404)
+				return
+			}
+		}
+
+		objectPath := strings.Join(segments, "/")
+		c.Set("objectPath", objectPath)
+
+		segmentLength := len(segments)
+		if segmentLength%2 == 0 {
+			// path is document
+			collectionPath := strings.Join(segments[:len(segments)-1], "/")
+			collection, err := getCollection(c.Request.Context(), collectionPath, db)
+			if err != nil {
+				c.Status(500)
+				return
+			}
+
+			documentId, err := primitive.ObjectIDFromHex(segments[len(segments)-1])
+			if err != nil {
+				c.Status(404)
+				return
+			}
+
+			c.Set("collectionPath", collectionPath)
+			c.Set("collection", collection)
+			c.Set("documentId", documentId)
+			handleDocumentRequest(c)
+		} else {
+			// path is collection
+			collectionPath := strings.Join(segments, "/")
+			collection, err := getCollection(c.Request.Context(), collectionPath, db)
+			if err != nil {
+				c.Status(500)
+				return
+			}
+
+			c.Set("collectionPath", collectionPath)
+			c.Set("collection", collection)
+			handleCollectionRequest(c)
+		}
+	})
+}
+
+func handleCollectionRequest(c *gin.Context) {
+	collection := c.MustGet("collection").(*mongo.Collection)
+	stream := c.MustGet("stream").(*stream)
+
+	switch c.Request.Method {
+	case "GET":
+		// get all document in this collection
+		cur, err := collection.Find(c.Request.Context(), gin.H{})
+		if err != nil {
+			c.Status(500)
+			return
+		}
+
+		defer cur.Close(c.Request.Context())
+		results := make([]map[string]interface{}, 0)
+		cur.All(c.Request.Context(), &results)
+
+		c.JSON(200, results)
+
+	case "POST":
+		// add document to this collection
+		data := make(map[string]interface{})
+		err := c.Bind(&data)
+		if err != nil {
+			return
+		}
+
+		res, err := collection.InsertOne(c.Request.Context(), data)
+		if err != nil {
+			c.Status(500)
+			return
+		}
+
+		result := collection.FindOne(c.Request.Context(), bson.M{"_id": res.InsertedID})
+		doc := make(map[string]interface{})
+		err = result.Decode(&doc)
+		if err != nil {
+			c.Status(500)
+			return
+		}
+
+		c.JSON(200, doc)
+		path := c.MustGet("objectPath").(string)
+		stream.add(path, doc)
+
+	case "DELETE":
+		// drop this collection
+		err := dropCollections(c.Request.Context(), collection, c.MustGet("db").(*mongo.Database), stream)
+		if err != nil {
+			c.Status(500)
+			return
+		}
+
+		c.Status(200)
+	}
+}
+
+func handleDocumentRequest(c *gin.Context) {
+	documentId := c.MustGet("documentId").(primitive.ObjectID)
+	collection := c.MustGet("collection").(*mongo.Collection)
+	documentPath := c.MustGet("objectPath").(string)
+	stream := c.MustGet("stream").(*stream)
+
+	switch c.Request.Method {
+	case "GET":
+		// get document by id
+		result := collection.FindOne(c.Request.Context(), bson.M{"_id": documentId})
+		doc := make(map[string]interface{})
+		err := result.Decode(&doc)
+		if err != nil {
+			c.Status(404)
+			return
+		}
+
+		c.JSON(200, doc)
+
+	case "PUT":
+		// update this document
+		data := make(map[string]interface{})
+		err := c.Bind(&data)
+		if err != nil {
+			return
+		}
+
+		update := bson.D{{Key: "$set", Value: data}}
+		_, err = collection.UpdateByID(c.Request.Context(), documentId, update)
+		if err != nil {
+			c.Status(404)
+			return
+		}
+
+		result := collection.FindOne(c.Request.Context(), bson.M{"_id": documentId})
+		doc := make(map[string]interface{})
+		result.Decode(&doc)
+		c.JSON(200, doc)
+		stream.update(documentPath, doc)
+
+		collectionPath := c.MustGet("collectionPath").(string)
+		stream.update(collectionPath, doc)
+		return
+
+	case "DELETE":
+		// delete this document
+		res, err := collection.DeleteOne(c.Request.Context(), bson.M{"_id": documentId})
+		if err != nil {
+			c.Status(500)
+			return
+		}
+
+		if res.DeletedCount == 0 {
+			c.Status(404)
+			return
+		}
+
+		c.Status(200)
+		deleted := map[string]interface{}{
+			"documentId": documentId.Hex(),
+		}
+		stream.delete(documentPath, deleted)
+
+		collectionPath := c.MustGet("collectionPath").(string)
+		stream.delete(collectionPath, deleted)
+	}
+}
