@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -19,40 +18,8 @@ func init() {
 
 	databaseRoute.Any("*path", func(c *gin.Context) {
 		db := c.MustGet("db").(*mongo.Database)
-
-		log.Println(c.IsWebsocket())
 		if c.Request.Method == "GET" && c.IsWebsocket() {
-			ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-			if err != nil {
-				c.Status(500)
-				return
-			}
-
-			stream := c.MustGet("stream").(*stream)
-
-			defer stream.cancelAll(ws)
-			defer ws.Close()
-
-			for {
-				data := map[string]interface{}{}
-				err := ws.ReadJSON(&data)
-				if err != nil {
-					break
-				}
-
-				command := data["command"].(string)
-				switch command {
-				case "sub":
-					path := data["path"].(string)
-					stream.listen(path, ws)
-
-				case "unsub":
-					path := data["path"].(string)
-					stream.cancel(path, ws)
-				}
-			}
-
-			log.Println("disconnected")
+			handleWebsocket(c)
 			return
 		}
 
