@@ -56,9 +56,9 @@ func init() {
 			return
 		}
 
-		path := c.Request.URL.Path
+		path := c.Param("path")
 		segments := strings.Split(path, "/")
-		segments = segments[3:]
+		segments = segments[1:]
 		if segments[len(segments)-1] == "" {
 			segments = segments[:len(segments)-1]
 		}
