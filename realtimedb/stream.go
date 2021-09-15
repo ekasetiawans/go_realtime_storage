@@ -52,9 +52,9 @@ func (s *stream) send(name, path string, value interface{}) {
 	defer s.lock.Unlock()
 
 	ev := &event{
-		name:  name,
-		path:  path,
-		value: value,
+		Name:  name,
+		Path:  path,
+		Value: value,
 	}
 
 	for c := range s.subscribers {
@@ -63,7 +63,7 @@ func (s *stream) send(name, path string, value interface{}) {
 }
 
 type event struct {
-	name  string
-	path  string
-	value interface{}
+	Name  string      `json:"event"`
+	Path  string      `json:"path"`
+	Value interface{} `json:"value"`
 }

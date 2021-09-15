@@ -39,7 +39,7 @@ func handleWebsocket(c *gin.Context) {
 			func() {
 				lock.Lock()
 				defer lock.Unlock()
-				if sub, ok := subscriptions[event.path]; ok {
+				if sub, ok := subscriptions[event.Path]; ok {
 					sub <- event
 				}
 			}()
@@ -66,7 +66,7 @@ func handleWebsocket(c *gin.Context) {
 
 					go func() {
 						for event := range sub {
-							ws.WriteJSON(event.value)
+							ws.WriteJSON(event)
 						}
 					}()
 				}
