@@ -1,4 +1,4 @@
-package main
+package realtimedb
 
 import (
 	"strings"
@@ -12,6 +12,8 @@ import (
 func init() {
 	databaseRoute := router.Group("/database/:database", func(c *gin.Context) {
 		databaseName := c.Param("database")
+		client := c.MustGet("dbClient").(*mongo.Client)
+
 		db := client.Database(databaseName)
 		c.Set("db", db)
 	})

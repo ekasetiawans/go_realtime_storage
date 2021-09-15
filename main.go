@@ -1,5 +1,8 @@
 package main
 
+import "github.com/ekasetiawans/realtimestorage/realtimedb"
+
 func main() {
-	router.Run(":8888")
+	server := &realtimedb.RealtimeStorage{}
+	server.Run(":8888")
 }

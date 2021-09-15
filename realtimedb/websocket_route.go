@@ -1,9 +1,19 @@
-package main
+package realtimedb
 
 import (
+	"net/http"
 	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+)
+
+var (
+	upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
 )
 
 func handleWebsocket(c *gin.Context) {

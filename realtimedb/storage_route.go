@@ -1,4 +1,4 @@
-package main
+package realtimedb
 
 import (
 	"io/ioutil"
@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -13,6 +14,7 @@ import (
 func init() {
 	storageRoute := router.Group("/storage/:database", func(c *gin.Context) {
 		databaseName := c.Param("database")
+		client := c.MustGet("dbClient").(*mongo.Client)
 		db := client.Database(databaseName)
 		c.Set("db", db)
 
