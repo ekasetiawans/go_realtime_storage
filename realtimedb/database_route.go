@@ -2,6 +2,7 @@ package realtimedb
 
 import (
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -108,6 +109,9 @@ func handleCollectionRequest(c *gin.Context) {
 			return
 		}
 
+		data["_created_at"] = time.Now()
+		data["_updated_at"] = nil
+		data["_deleted_at"] = nil
 		res, err := collection.InsertOne(c.Request.Context(), data)
 		if err != nil {
 			c.Status(500)
@@ -165,6 +169,7 @@ func handleDocumentRequest(c *gin.Context) {
 			return
 		}
 
+		data["_updated_at"] = time.Now()
 		update := bson.D{{Key: "$set", Value: data}}
 		_, err = collection.UpdateByID(c.Request.Context(), documentId, update)
 		if err != nil {

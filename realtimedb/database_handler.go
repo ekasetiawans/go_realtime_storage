@@ -97,11 +97,13 @@ func dropCollections(context context.Context, collection *mongo.Collection, db *
 			return err
 		}
 
+		metaCollections.DeleteOne(context, bson.M{"_id": colId})
 		stream.delete(colPath, nil)
 	}
 
 	err = collection.Drop(context)
 	if err == nil {
+		metaCollections.DeleteOne(context, bson.M{"_id": meta["_id"]})
 		stream.delete(path, nil)
 	}
 
