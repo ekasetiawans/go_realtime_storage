@@ -1,6 +1,8 @@
 package realtimedb
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -89,7 +91,23 @@ func handleCollectionRequest(c *gin.Context) {
 	switch c.Request.Method {
 	case "GET":
 		// get all document in this collection
-		cur, err := collection.Find(c.Request.Context(), gin.H{})
+
+		query := c.Query("q")
+		var filter interface{}
+		if query != "" {
+			jb, err := base64.StdEncoding.DecodeString(query)
+			if err == nil {
+				err := json.Unmarshal(jb, &filter)
+				if err != nil {
+					c.Status(402)
+					return
+				}
+			}
+		} else {
+			filter = gin.H{}
+		}
+
+		cur, err := collection.Find(c.Request.Context(), filter)
 		if err != nil {
 			c.Status(500)
 			return
@@ -170,6 +188,8 @@ func handleDocumentRequest(c *gin.Context) {
 		}
 
 		data["_updated_at"] = time.Now()
+		delete(data, "_id")
+
 		update := bson.D{{Key: "$set", Value: data}}
 		_, err = collection.UpdateByID(c.Request.Context(), documentId, update)
 		if err != nil {
