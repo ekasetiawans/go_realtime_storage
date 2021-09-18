@@ -130,6 +130,8 @@ func handleCollectionRequest(c *gin.Context) {
 		data["_created_at"] = time.Now()
 		data["_updated_at"] = nil
 		data["_deleted_at"] = nil
+		delete(data, "_id")
+
 		res, err := collection.InsertOne(c.Request.Context(), data)
 		if err != nil {
 			c.Status(500)

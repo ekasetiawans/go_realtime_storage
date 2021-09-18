@@ -27,8 +27,16 @@ func (r *RealtimeStorage) Run(address string) error {
 	router := createRoute()
 
 	router.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Headers", "*")
+		c.Header("Access-Control-Allow-Methods", "*")
+		c.Next()
+	})
+
+	router.Use(func(c *gin.Context) {
 		c.Set("stream", stream)
 		c.Set("dbClient", client)
+		c.Next()
 	})
 
 	initDatabaseRouter(router)
