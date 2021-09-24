@@ -39,8 +39,29 @@ func (r *RealtimeStorage) Run(address string) error {
 		c.Next()
 	})
 
+	router.Use(func(c *gin.Context) {
+		token := c.Request.Header.Get("authorization")
+		if token != "" {
+			token = token[7:]
+		}
+
+		if token != "" {
+			user, err := validateJwt(token)
+			if err != nil {
+				c.Status(401)
+				c.Abort()
+				return
+			}
+
+			c.Set("user", user)
+		}
+
+		c.Next()
+	})
+
 	initDatabaseRouter(router)
 	initStorageRouter(router)
+	initAuthRouter(router)
 
 	r.srv = &http.Server{
 		Addr:    address,
